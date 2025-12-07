@@ -1,8 +1,0 @@
-# Railway Python projesi için
-providers = ["python"]
-
-[phases.setup]
-nixPkgs = ["ffmpeg"]
-
-[start]
-cmd = "python bot.py"
