@@ -721,6 +721,7 @@ async def recipe(ctx):
 
 @bot.command()
 async def trivia(ctx):
+    """Fetches a random trivia question."""
     trivia_url = "https://opentdb.com/api.php?amount=1&type=multiple"
     response = requests.get(trivia_url)
     if response.status_code == 200:
@@ -734,12 +735,13 @@ async def trivia(ctx):
 
         answer_options = "\n".join([f"{i+1}. {ans}" for i, ans in enumerate(all_answers)])
 
-        await ctx.send(f"**Trivia Question:** {question}\n\n{answer_options}\n\n*Correct Answer: {correct_answer}*")
+        await ctx.send(f"**Trivia Question:** {question}\n\n{answer_options}\n\n*Correct Answer: ||{correct_answer}||*")
     else:
         await ctx.send("Sorry, I couldn't fetch a trivia question right now.")
         
 @bot.command()
 async def cat(ctx):
+    """Fetches a random cat image."""
     cat_url = "https://cataas.com/cat"
     #This returns a random cat image
     cat_image = requests.get(cat_url)
@@ -751,6 +753,7 @@ async def cat(ctx):
 
 @bot.command()
 async def dog(ctx):
+    """Fetches a random dog image."""
     dog_url = "https://random.dog/woof.json"
     response = requests.get(dog_url)
     if response.status_code == 200:
@@ -771,6 +774,7 @@ async def dog(ctx):
 
 @bot.command()
 async def fox(ctx):
+    """Fetches a random fox image."""
     fox_url = "https://randomfox.ca/floof/"
     response = requests.get(fox_url)
     if response.status_code == 200:
@@ -856,6 +860,7 @@ async def bible(ctx):
                 print(f"Unexpected error in !bible command: {type(e).__name__} - {e}") 
 @bot.command()
 async def quran(ctx):
+    """Fetches a random Quran verse."""
     try:
         random_number = random.randint(1, 6236)  # There are 6236 verses in the Quran
         api_url = f"https://api.alquran.cloud/v1/ayah/{random_number}/en.asad"
@@ -1223,6 +1228,24 @@ async def lol(ctx):
         await ctx.send(f"❌ API hatası: {e.response.status_code}. Lütfen daha sonra tekrar deneyin.")
     except Exception as e:
         await ctx.send(f"❌ Bir hata oluştu: {str(e)}")
+
+@bot.command()
+async def help(ctx):
+    """Bot'un mevcut komutlarını listeler"""
+    embed = discord.Embed(
+        title="🤖 Bot Komutları",
+        description="Mevcut tüm komutlar aşağıda alfabetik sırayla listelenmiştir. Komutları kullanmak için `!komut_adi` yazın.",
+        color=discord.Color.blue()
+    )
+    
+    for command in sorted(bot.commands, key=lambda c: c.name):
+        embed.add_field(
+            name=f"!{command.name}",
+            value=command.help or "Açıklama mevcut değil.",
+            inline=False
+        )
+    
+    await ctx.send(embed=embed)
 
 async def main():
     await bot.start(DISCORD_TOKEN)
