@@ -506,6 +506,71 @@ async def fact(ctx):
         await ctx.send(f"An error occurred: {str(e)}")
 
 @bot.command()
+async def advice(ctx):
+    """Fetches a random piece of advice."""
+    try:
+        api_url = "https://api.adviceslip.com/advice"
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()  # Raise an HTTPError for bad responses
+        
+        advice_data = response.json()
+        advice_slip = advice_data.get('slip', {})
+        advice_text = advice_slip.get('advice')
+        
+        if advice_text:
+            await ctx.send(f"💡 **Advice:** {advice_text}")
+        else:
+            await ctx.send("Sorry, I couldn't get a piece of advice from the API.")
+            print(f"Advice API response missing advice: {advice_data}")
+            
+    except requests.exceptions.Timeout:
+        await ctx.send("Sorry, the advice service timed out. Please try again later.")
+    except requests.exceptions.HTTPError as e:
+        await ctx.send(f"Sorry, the advice service returned an error: {e.response.status_code} - {e.response.reason}.")
+    except requests.exceptions.RequestException as e:
+        await ctx.send(f"Sorry, there was an error communicating with the advice service: {type(e).__name__}.")
+    except Exception as e:
+        await ctx.send("An unexpected error occurred while trying to fetch advice.")
+        print(f"Unexpected error in !advice command: {type(e).__name__} - {e}")
+
+@bot.command()
+async def dict(ctx, *, word: str):
+    """Fetches the definition of a given word."""
+    try:
+        encoded_word = urllib.parse.quote(word)
+        api_url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{encoded_word}"
+        
+        processing_message = await ctx.send(f"📖 Looking up the definition for \"{word}\"...")
+
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()  # Raise an HTTPError for bad responses
+
+        data = response.json()
+
+        if isinstance(data, list) and len(data) > 0:
+            definitions = []
+            for meaning in data[0].get('meanings', []):
+                part_of_speech = meaning.get('partOfSpeech', 'N/A')
+                for definition in meaning.get('definitions', []):
+                    def_text = definition.get('definition', 'N/A')
+                    definitions.append(f"**{part_of_speech}:** {def_text}")
+
+            definitions_message = "\n".join(definitions[:5])  # Limit to first 5 definitions
+            await processing_message.edit(content=f"**Definitions for \"{word}\":**\n{definitions_message}")
+        else:
+            await processing_message.edit(content=f"Sorry, I couldn't find a definition for \"{word}\". Please check the spelling and try again.")
+
+    except requests.exceptions.Timeout:
+        await processing_message.edit(content="Sorry, the dictionary service timed out. Please try again later.")
+    except requests.exceptions.HTTPError as e:
+        await processing_message.edit(content=f"Sorry, the dictionary service returned an error: {e.response.status_code}. Please try again.")
+    except requests.exceptions.RequestException as e:
+        await processing_message.edit(content=f"Sorry, there was an error communicating with the dictionary service: {type(e).__name__}.")
+    except Exception as e:
+        await processing_message.edit(content="An unexpected error occurred while trying to fetch the definition.")
+        print(f"Unexpected error in !dict command: {type(e).__name__} - {e}")
+
+@bot.command()
 async def location(ctx, *, city_name: str):
     """Fetches latitude and longitude for a given city."""
     try:
