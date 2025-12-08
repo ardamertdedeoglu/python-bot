@@ -643,6 +643,102 @@ async def musk(ctx):
         await ctx.send(f"An error occurred: {str(e)}")
         
 @bot.command()
+async def food(ctx):
+    food_url = "https://foodish-api.com/api/"
+    response = requests.get(food_url)
+    if response.status_code == 200:
+        data = response.json()
+        food_image_url = data.get('image')
+        if food_image_url:
+            food_image = requests.get(food_image_url)
+            if food_image.status_code == 200:
+                with io.BytesIO(food_image.content) as image_buffer:
+                    filename = food_image_url.split("/")[-1]
+                    await ctx.send(file=discord.File(image_buffer, filename=filename))
+            else:
+                await ctx.send("Sorry, I couldn't fetch the food image right now.")
+        else:
+            await ctx.send("Sorry, I couldn't get a food image URL.")
+
+@bot.command()
+async def covid(ctx, *, country_code: str):
+    country_code = country_code.upper()
+    covid_url = f"https://disease.sh/v3/covid-19/countries/{country_code}"
+    response = requests.get(covid_url)
+    if response.status_code == 200:
+        data = response.json()
+        country = data['country']
+        cases = data['cases']
+        today_cases = data['todayCases']
+        deaths = data['deaths']
+        today_deaths = data['todayDeaths']
+        recovered = data['recovered']
+        active = data['active']
+        critical = data['critical']
+        cases_per_million = data['casesPerOneMillion']
+        deaths_per_million = data['deathsPerOneMillion']
+        tests = data['tests']
+        tests_per_million = data['testsPerOneMillion']
+        population = data['population']
+
+        embed = discord.Embed(title=f"COVID-19 Stats for {country}", color=discord.Color.blue())
+        embed.add_field(name="Total Cases", value=f"{cases:,}", inline=True)
+        embed.add_field(name="Today's Cases", value=f"{today_cases:,}", inline=True)
+        embed.add_field(name="Total Deaths", value=f"{deaths:,}", inline=True)
+        embed.add_field(name="Today's Deaths", value=f"{today_deaths:,}", inline=True)
+        embed.add_field(name="Recovered", value=f"{recovered:,}", inline=True)
+        embed.add_field(name="Active Cases", value=f"{active:,}", inline=True)
+        embed.add_field(name="Critical Cases", value=f"{critical:,}", inline=True)
+        embed.add_field(name="Cases per Million", value=f"{cases_per_million:,}", inline=True)
+        embed.add_field(name="Deaths per Million", value=f"{deaths_per_million:,}", inline=True)
+        embed.add_field(name="Total Tests", value=f"{tests:,}", inline=True)
+        embed.add_field(name="Tests per Million", value=f"{tests_per_million:,}", inline=True)
+        embed.add_field(name="Population", value=f"{population:,}", inline=True)
+
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send(f"Sorry, I couldn't fetch COVID-19 data for country code '{country_code}'.")
+
+@bot.command()
+async def recipe(ctx):
+    food_url = "https://www.themealdb.com/api/json/v1/1/random.php"
+    response = requests.get(food_url)
+    if response.status_code == 200:
+        data = response.json()
+        meal = data['meals'][0]
+        meal_name = meal['strMeal']
+        meal_instructions = meal['strInstructions']
+        meal_image_url = meal['strMealThumb']
+        meal_source = meal['strSource'] if meal['strSource'] else "No source available"
+
+        embed = discord.Embed(title=meal_name, description=meal_instructions[:2048]) # Discord embed description limit
+        embed.set_image(url=meal_image_url)
+        embed.add_field(name="Source", value=meal_source, inline=False)
+
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("Sorry, I couldn't fetch a food recipe right now.")
+
+@bot.command()
+async def trivia(ctx):
+    trivia_url = "https://opentdb.com/api.php?amount=1&type=multiple"
+    response = requests.get(trivia_url)
+    if response.status_code == 200:
+        data = response.json()
+        question_data = data['results'][0]
+        question = question_data['question']
+        correct_answer = question_data['correct_answer']
+        incorrect_answers = question_data['incorrect_answers']
+        all_answers = incorrect_answers + [correct_answer]
+        random.shuffle(all_answers)
+
+        answer_options = "\n".join([f"{i+1}. {ans}" for i, ans in enumerate(all_answers)])
+
+        await ctx.send(f"**Trivia Question:** {question}\n\n{answer_options}\n\n*Correct Answer: {correct_answer}*")
+    else:
+        await ctx.send("Sorry, I couldn't fetch a trivia question right now.")
+        
+@bot.command()
 async def cat(ctx):
     cat_url = "https://cataas.com/cat"
     #This returns a random cat image
