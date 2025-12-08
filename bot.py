@@ -1272,60 +1272,94 @@ async def game(ctx, *, arg: str = ""):
     
     # Parse date filter
     date_filter = ""
+    current_year = datetime.datetime.now().year
+    
     if arg.startswith(';'):
         try:
             year = int(arg[1:])
-            date_filter = f"dates=1900-01-01,{year}-12-31"
+            date_filter = f"&dates=1900-01-01,{year}-12-31"
         except ValueError:
             await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game ;2020")
             return
     elif arg.startswith(':'):
         try:
             year = int(arg[1:])
-            date_filter = f"dates={year}-01-01,2025-12-31"
+            # Sadece bugüne kadar çıkmış oyunları al
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            date_filter = f"&dates={year}-01-01,{today}"
         except ValueError:
             await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game :2020")
             return
     
     try:
-        # Rastgele bir sayfa seç (1-100 arası)
-        random_page = random.randint(1, 100)
+        # Önce ilk sayfayı çek ve toplam oyun sayısını öğren
+        # Minimum rating filtresi ekle (3.0+) ve sadece çıkmış oyunları al
+        base_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&ordering=-metacritic,-rating&metacritic=70,100{date_filter}"
         
-        # Tarih filtresi varsa en yeni oyunları, yoksa yüksek puanlı oyunları sırala
-        if date_filter:
-            ordering = "-released"  # Tarih filtresi varsa en yeni oyunları
+        # İlk istek: toplam sayıyı öğren
+        first_response = requests.get(base_url + "&page=1", timeout=10)
+        first_response.raise_for_status()
+        first_data = first_response.json()
+        
+        total_count = first_data.get('count', 0)
+        if total_count == 0:
+            await ctx.send("❌ Belirtilen kriterlere uygun oyun bulunamadı.")
+            return
+        
+        # Maksimum sayfa sayısını hesapla (RAWG max 500 sayfa destekliyor)
+        max_pages = min(total_count // 40 + 1, 250)  # İlk 250 sayfayla sınırla (10,000 oyun)
+        
+        # Rastgele sayfa seç - ağırlıklı olarak ilk sayfalara öncelik ver
+        # Bu şekilde daha kaliteli oyunlar gelir
+        weights = [1 / (i ** 0.5) for i in range(1, max_pages + 1)]  # Kök ağırlık
+        random_page = random.choices(range(1, max_pages + 1), weights=weights, k=1)[0]
+        
+        # Eğer ilk sayfayı zaten çektiyseysek ve sayfa 1 ise, onu kullan
+        if random_page == 1:
+            games = first_data.get('results', [])
         else:
-            ordering = "-metacritic"  # Genel için profesyonel puanlı oyunları
-        
-        api_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&page={random_page}&ordering={ordering}"
-        if date_filter:
-            api_url += f"&{date_filter}"
-        
-        response = requests.get(api_url, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        games = data.get('results', [])
+            api_url = base_url + f"&page={random_page}"
+            response = requests.get(api_url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            games = data.get('results', [])
         
         if not games:
             await ctx.send("❌ Belirtilen kriterlere uygun oyun bulunamadı.")
             return
         
-        random_game = random.choice(games)
+        # Rating'i 0 olmayan oyunları filtrele
+        quality_games = [g for g in games if g.get('rating', 0) > 0 and g.get('ratings_count', 0) > 10]
+        if not quality_games:
+            quality_games = games  # Fallback: tüm oyunları kullan
+        
+        random_game = random.choice(quality_games)
+        
+        # Açıklama kontrolü
+        description = random_game.get('description_raw', '') or random_game.get('description', '') or 'Açıklama mevcut değil.'
+        if len(description) > 500:
+            description = description[:500] + "..."
         
         embed = discord.Embed(
             title=f"🎮 Rastgele Oyun Önerisi: {random_game['name']}",
-            description=random_game.get('description_raw', random_game.get('description', 'Açıklama mevcut değil.'))[:500] + "..." if len(random_game.get('description_raw', '')) > 500 else random_game.get('description_raw', 'Açıklama mevcut değil.'),
+            description=description,
             color=discord.Color.green()
         )
         
         if random_game.get('background_image'):
             embed.set_image(url=random_game['background_image'])
         
-        embed.add_field(name="⭐ Puan", value=f"{random_game.get('metacritic', random_game.get('rating', 'Bilinmiyor'))}/100" if random_game.get('metacritic') else f"{random_game.get('rating', 'Bilinmiyor')}/5", inline=True)
+        embed.add_field(name="⭐ Puan", value=f"{random_game.get('rating', 'Bilinmiyor')}/5", inline=True)
         embed.add_field(name="📅 Çıkış Tarihi", value=random_game.get('released', 'Bilinmiyor'), inline=True)
         embed.add_field(name="🎯 Türler", value=", ".join([genre['name'] for genre in random_game.get('genres', [])]) or 'Bilinmiyor', inline=True)
-        embed.add_field(name="🖥️ Platformlar", value=", ".join([platform['platform']['name'] for platform in random_game.get('platforms', [])]) or 'Bilinmiyor', inline=True)
+        
+        # Platform bilgisi güvenli şekilde al
+        platforms = random_game.get('platforms') or []
+        platform_names = []
+        for p in platforms:
+            if p and p.get('platform') and p['platform'].get('name'):
+                platform_names.append(p['platform']['name'])
+        embed.add_field(name="🖥️ Platformlar", value=", ".join(platform_names) or 'Bilinmiyor', inline=True)
         
         embed.set_footer(text="RAWG API'si ile önerildi 🎯")
         
