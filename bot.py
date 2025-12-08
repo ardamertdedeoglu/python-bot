@@ -562,10 +562,11 @@ async def bible(ctx):
                 
                 data = response.json()
                 
-                book = data.get('book', 'Unknown')
-                chapter = data.get('chapter', '?')
-                verse = data.get('verse', '?')
-                text = data.get('text', 'No verse text available.')
+                random_verse = data.get('random_verse', {})
+                book = random_verse.get('book', 'Unknown')
+                chapter = random_verse.get('chapter', '?')
+                verse = random_verse.get('verse', '?')
+                text = random_verse.get('text', 'No verse text available.')
                 
                 embed = discord.Embed(
                     title=f"📖 {book} {chapter}:{verse}",
