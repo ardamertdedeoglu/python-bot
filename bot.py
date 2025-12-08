@@ -621,12 +621,18 @@ async def musk(ctx):
         description = data.get('description', 'N/A')
         url = data.get('url', 'N/A')
         urlImage = data.get('urlImage', None)
-        date = data.get('date', 'N/A')
+        date = data.get('publishDate', 'N/A')
+        
+        #format the date
+        try:
+            formatted_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S%z").strftime("%B %d, %Y")
+        except Exception:
+            formatted_date = date
         
         if urlImage:
             embed = discord.Embed(title=title, description=description, url=url)
             embed.set_image(url=urlImage)
-            source_field = f"Source: {source}\nDate: {date}"
+            source_field = f"Source: {source}\nDate: {formatted_date}"
             embed.add_field(name="Info", value=source_field, inline=False)
         
             await ctx.send(embed=embed)
