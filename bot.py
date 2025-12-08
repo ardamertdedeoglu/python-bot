@@ -585,7 +585,39 @@ async def bible(ctx):
                 await ctx.send(f"Sorry, there was an error communicating with the Bible API: {type(e).__name__}.")
             except Exception as e:
                 await ctx.send("An unexpected error occurred while fetching a Bible verse.")
-                print(f"Unexpected error in !bible command: {type(e).__name__} - {e}")       
+                print(f"Unexpected error in !bible command: {type(e).__name__} - {e}") 
+@bot.command()
+async def quran(ctx):
+    try:
+        random_number = random.randint(1, 6236)  # There are 6236 verses in the Quran
+        api_url = f"https://api.alquran.cloud/v1/ayah/{random_number}/en.asad"
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        if data.get('data'):
+            verse_data = data['data']
+            surah = verse_data.get('surah', {}).get('englishName', 'Unknown')
+            number_in_surah = verse_data.get('numberInSurah', '?')
+            text = verse_data.get('text', 'No verse text available.')
+            
+            embed = discord.Embed(
+                title=f"📖 {surah} {number_in_surah}",
+                description=f"*\"{text.strip()}\"*",
+                color=discord.Color.green()
+            )
+            embed.set_footer(text="Translation by Muhammad Asad")
+            
+            await ctx.send(embed=embed)
+    except requests.exceptions.Timeout:
+        await ctx.send("Sorry, the Quran API timed out. Please try again later.")
+    except requests.exceptions.HTTPError as e:
+        await ctx.send(f"Sorry, the Quran API returned an error: {e.response.status_code}.")
+    except requests.exceptions.RequestException as e:
+        await ctx.send(f"Sorry, there was an error communicating with the Quran API: {type(e).__name__}.")
+    except Exception as e:
+        await ctx.send("An unexpected error occurred while fetching a Quran verse.")
+        print(f"Unexpected error in !quran command: {type(e).__name__} - {e}")
     
 
 @bot.command()
