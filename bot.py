@@ -553,6 +553,26 @@ async def cat(ctx):
         await ctx.send("Sorry, I couldn't fetch a cat image right now.")
 
 @bot.command()
+async def dog(ctx):
+    dog_url = "https://random.dog/woof.json"
+    response = requests.get(dog_url)
+    if response.status_code == 200:
+        data = response.json()
+        dog_image_url = data.get('url')
+        if dog_image_url:
+            dog_image = requests.get(dog_image_url)
+            if dog_image.status_code == 200:
+                with io.BytesIO(dog_image.content) as image_buffer:
+                    filename = dog_image_url.split("/")[-1]
+                    await ctx.send(file=discord.File(image_buffer, filename=filename))
+            else:
+                await ctx.send("Sorry, I couldn't fetch the dog image right now.")
+        else:
+            await ctx.send("Sorry, I couldn't get a dog image URL.")
+    else:
+        await ctx.send("Sorry, I couldn't fetch a dog image right now.")
+
+@bot.command()
 async def bible(ctx):
             """Fetches a random Bible verse."""
             try:
