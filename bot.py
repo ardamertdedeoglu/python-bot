@@ -1266,13 +1266,16 @@ async def game(ctx, *, arg: str = ""):
     !game ;2020 - 2020'den önce çıkmış oyunlar
     !game :2020 - 2020'den sonra çıkmış oyunlar
     !game .2022 - Sadece 2022 yılında çıkmış oyunlar
+    !game witcher - İsimde "witcher" geçen en iyi oyun
     """
     if not RAWG_API_KEY or RAWG_API_KEY == "your_rawg_api_key_here":
         await ctx.send("❌ RAWG API anahtarı ayarlanmamış. Lütfen .env dosyasına geçerli bir RAWG_API_KEY ekleyin.\nÜcretsiz API anahtarı için: https://rawg.io/login?next=/apikeys")
         return
     
-    # Parse date filter
+    # Parse date filter veya search query
     date_filter = ""
+    search_query = ""
+    is_search = False
     
     if arg.startswith(';'):
         try:
@@ -1297,49 +1300,67 @@ async def game(ctx, *, arg: str = ""):
         except ValueError:
             await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game .2022")
             return
+    elif arg.strip():
+        # İsim araması
+        search_query = urllib.parse.quote(arg.strip())
+        is_search = True
     
     processing_msg = await ctx.send("🔍 Oyun aranıyor...")
     
     try:
-        # Rating'e göre sırala, metacritic filtresi olmadan
-        base_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&ordering=-added,-rating{date_filter}"
-        
-        # İlk istek: toplam sayıyı öğren
-        first_response = requests.get(base_url + "&page=1", timeout=10)
-        first_response.raise_for_status()
-        first_data = first_response.json()
-        
-        total_count = first_data.get('count', 0)
-        if total_count == 0:
-            await processing_msg.edit(content="❌ Belirtilen kriterlere uygun oyun bulunamadı.")
-            return
-        
-        # Maksimum sayfa sayısını hesapla - daha az sayfayla sınırla
-        max_pages = min(total_count // 40 + 1, 25)  # İlk 25 sayfa (1000 oyun)
-        
-        # Rastgele sayfa seç - ağırlıklı olarak ilk sayfalara öncelik ver
-        weights = [1 / (i ** 0.3) for i in range(1, max_pages + 1)]
-        random_page = random.choices(range(1, max_pages + 1), weights=weights, k=1)[0]
-        
-        # Eğer ilk sayfayı zaten çektiyseysek ve sayfa 1 ise, onu kullan
-        if random_page == 1:
-            games = first_data.get('results', [])
+        if is_search:
+            # İsim araması - en iyi sonucu getir
+            search_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&search={search_query}&page_size=1&ordering=-rating"
+            search_response = requests.get(search_url, timeout=10)
+            search_response.raise_for_status()
+            search_data = search_response.json()
+            
+            games = search_data.get('results', [])
+            if not games:
+                await processing_msg.edit(content=f"❌ \"{arg}\" ile eşleşen oyun bulunamadı.")
+                return
+            
+            selected_game = games[0]
         else:
-            api_url = base_url + f"&page={random_page}"
-            response = requests.get(api_url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            games = data.get('results', [])
-        
-        if not games:
-            await processing_msg.edit(content="❌ Belirtilen kriterlere uygun oyun bulunamadı.")
-            return
-        
-        # Rastgele oyun seç
-        selected_game = random.choice(games)
-        game_id = selected_game.get('id')
+            # Rastgele oyun seçimi (mevcut mantık)
+            base_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&ordering=-added,-rating{date_filter}"
+            
+            # İlk istek: toplam sayıyı öğren
+            first_response = requests.get(base_url + "&page=1", timeout=10)
+            first_response.raise_for_status()
+            first_data = first_response.json()
+            
+            total_count = first_data.get('count', 0)
+            if total_count == 0:
+                await processing_msg.edit(content="❌ Belirtilen kriterlere uygun oyun bulunamadı.")
+                return
+            
+            # Maksimum sayfa sayısını hesapla - daha az sayfayla sınırla
+            max_pages = min(total_count // 40 + 1, 25)  # İlk 25 sayfa (1000 oyun)
+            
+            # Rastgele sayfa seç - ağırlıklı olarak ilk sayfalara öncelik ver
+            weights = [1 / (i ** 0.3) for i in range(1, max_pages + 1)]
+            random_page = random.choices(range(1, max_pages + 1), weights=weights, k=1)[0]
+            
+            # Eğer ilk sayfayı zaten çektiyseysek ve sayfa 1 ise, onu kullan
+            if random_page == 1:
+                games = first_data.get('results', [])
+            else:
+                api_url = base_url + f"&page={random_page}"
+                response = requests.get(api_url, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                games = data.get('results', [])
+            
+            if not games:
+                await processing_msg.edit(content="❌ Belirtilen kriterlere uygun oyun bulunamadı.")
+                return
+            
+            # Rastgele oyun seç
+            selected_game = random.choice(games)
         
         # Detaylı bilgi için /games/{id} endpoint'ine istek at
+        game_id = selected_game.get('id')
         detail_url = f"https://api.rawg.io/api/games/{game_id}?key={RAWG_API_KEY}"
         detail_response = requests.get(detail_url, timeout=10)
         detail_response.raise_for_status()
