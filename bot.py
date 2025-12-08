@@ -573,6 +573,58 @@ async def dog(ctx):
         await ctx.send("Sorry, I couldn't fetch a dog image right now.")
 
 @bot.command()
+async def fox(ctx):
+    fox_url = "https://randomfox.ca/floof/"
+    response = requests.get(fox_url)
+    if response.status_code == 200:
+        data = response.json()
+        fox_image_url = data.get('image')
+        if fox_image_url:
+            fox_image = requests.get(fox_image_url)
+            if fox_image.status_code == 200:
+                with io.BytesIO(fox_image.content) as image_buffer:
+                    filename = fox_image_url.split("/")[-1]
+                    await ctx.send(file=discord.File(image_buffer, filename=filename))
+            else:
+                await ctx.send("Sorry, I couldn't fetch the fox image right now.")
+        else:
+            await ctx.send("Sorry, I couldn't get a fox image URL.")
+    else:
+        await ctx.send("Sorry, I couldn't fetch a fox image right now.")
+
+@bot.command()
+async def catfact(ctx, *, count: int):
+    """Fetches random cat facts."""
+    if count < 1 or count > 5:
+        await ctx.send("Please request between 1 and 5 cat facts.")
+        return
+
+    try:
+        api_url = f"https://meowfacts.herokuapp.com/?count={count}"
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        
+        facts_data = response.json()
+        
+        if count == 1:
+            facts_data = [facts_data]  # Make it a list for uniform processing
+        
+        facts = [fact.get('data', 'No fact available.') for fact in facts_data]
+        facts_message = "\n\n".join(f"**Fact {i+1}:** {fact}" for i, fact in enumerate(facts))
+        
+        await ctx.send(facts_message)
+        
+    except requests.exceptions.Timeout:
+        await ctx.send("Sorry, the cat fact service timed out. Please try again later.")
+    except requests.exceptions.HTTPError as e:
+        await ctx.send(f"Sorry, the cat fact service returned an error: {e.response.status_code}.")
+    except requests.exceptions.RequestException as e:
+        await ctx.send(f"Sorry, there was an error communicating with the cat fact service: {type(e).__name__}.")
+    except Exception as e:
+        await ctx.send("An unexpected error occurred while trying to fetch cat facts.")
+        print(f"Unexpected error in !catfact command: {type(e).__name__} - {e}")
+
+@bot.command()
 async def bible(ctx):
             """Fetches a random Bible verse."""
             try:
