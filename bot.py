@@ -1272,7 +1272,6 @@ async def game(ctx, *, arg: str = ""):
     
     # Parse date filter
     date_filter = ""
-    current_year = datetime.datetime.now().year
     
     if arg.startswith(';'):
         try:
@@ -1284,17 +1283,17 @@ async def game(ctx, *, arg: str = ""):
     elif arg.startswith(':'):
         try:
             year = int(arg[1:])
-            # Sadece bugüne kadar çıkmış oyunları al
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
-            date_filter = f"&dates={year}-01-01,{today}"
+            # Yılın başından yılın sonuna kadar
+            date_filter = f"&dates={year}-01-01,{year + 5}-12-31"
         except ValueError:
             await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game :2020")
             return
     
+    processing_msg = await ctx.send("🔍 Oyun aranıyor...")
+    
     try:
-        # Önce ilk sayfayı çek ve toplam oyun sayısını öğren
-        # Minimum rating filtresi ekle (3.0+) ve sadece çıkmış oyunları al
-        base_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&ordering=-metacritic,-rating&metacritic=70,100{date_filter}"
+        # Rating'e göre sırala, metacritic filtresi olmadan
+        base_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&ordering=-added,-rating{date_filter}"
         
         # İlk istek: toplam sayıyı öğren
         first_response = requests.get(base_url + "&page=1", timeout=10)
@@ -1303,15 +1302,14 @@ async def game(ctx, *, arg: str = ""):
         
         total_count = first_data.get('count', 0)
         if total_count == 0:
-            await ctx.send("❌ Belirtilen kriterlere uygun oyun bulunamadı.")
+            await processing_msg.edit(content="❌ Belirtilen kriterlere uygun oyun bulunamadı.")
             return
         
-        # Maksimum sayfa sayısını hesapla (RAWG max 500 sayfa destekliyor)
-        max_pages = min(total_count // 40 + 1, 250)  # İlk 250 sayfayla sınırla (10,000 oyun)
+        # Maksimum sayfa sayısını hesapla - daha az sayfayla sınırla
+        max_pages = min(total_count // 40 + 1, 25)  # İlk 25 sayfa (1000 oyun)
         
         # Rastgele sayfa seç - ağırlıklı olarak ilk sayfalara öncelik ver
-        # Bu şekilde daha kaliteli oyunlar gelir
-        weights = [1 / (i ** 0.5) for i in range(1, max_pages + 1)]  # Kök ağırlık
+        weights = [1 / (i ** 0.3) for i in range(1, max_pages + 1)]
         random_page = random.choices(range(1, max_pages + 1), weights=weights, k=1)[0]
         
         # Eğer ilk sayfayı zaten çektiyseysek ve sayfa 1 ise, onu kullan
@@ -1325,55 +1323,118 @@ async def game(ctx, *, arg: str = ""):
             games = data.get('results', [])
         
         if not games:
-            await ctx.send("❌ Belirtilen kriterlere uygun oyun bulunamadı.")
+            await processing_msg.edit(content="❌ Belirtilen kriterlere uygun oyun bulunamadı.")
             return
         
-        # Rating'i 0 olmayan oyunları filtrele
-        quality_games = [g for g in games if g.get('rating', 0) > 0 and g.get('ratings_count', 0) > 10]
-        if not quality_games:
-            quality_games = games  # Fallback: tüm oyunları kullan
+        # Rastgele oyun seç
+        selected_game = random.choice(games)
+        game_id = selected_game.get('id')
         
-        random_game = random.choice(quality_games)
+        # Detaylı bilgi için /games/{id} endpoint'ine istek at
+        detail_url = f"https://api.rawg.io/api/games/{game_id}?key={RAWG_API_KEY}"
+        detail_response = requests.get(detail_url, timeout=10)
+        detail_response.raise_for_status()
+        game_detail = detail_response.json()
         
-        # Açıklama kontrolü
-        description = random_game.get('description_raw', '') or random_game.get('description', '') or 'Açıklama mevcut değil.'
-        if len(description) > 500:
-            description = description[:500] + "..."
+        # Açıklama - HTML temizle
+        description = game_detail.get('description_raw', '') or 'Açıklama mevcut değil.'
+        if len(description) > 800:
+            description = description[:800] + "..."
         
         embed = discord.Embed(
-            title=f"🎮 Rastgele Oyun Önerisi: {random_game['name']}",
+            title=f"🎮 {game_detail.get('name', 'Bilinmeyen Oyun')}",
             description=description,
+            url=game_detail.get('website') or f"https://rawg.io/games/{game_detail.get('slug', '')}",
             color=discord.Color.green()
         )
         
-        if random_game.get('background_image'):
-            embed.set_image(url=random_game['background_image'])
+        # Görsel
+        if game_detail.get('background_image'):
+            embed.set_image(url=game_detail['background_image'])
         
-        embed.add_field(name="⭐ Puan", value=f"{random_game.get('rating', 'Bilinmiyor')}/5", inline=True)
-        embed.add_field(name="📅 Çıkış Tarihi", value=random_game.get('released', 'Bilinmiyor'), inline=True)
-        embed.add_field(name="🎯 Türler", value=", ".join([genre['name'] for genre in random_game.get('genres', [])]) or 'Bilinmiyor', inline=True)
+        # Rating ve Metacritic
+        rating = game_detail.get('rating', 0)
+        rating_display = f"⭐ {rating}/5" if rating > 0 else "Henüz puanlanmamış"
+        metacritic = game_detail.get('metacritic')
+        metacritic_display = f"🏆 {metacritic}/100" if metacritic else "N/A"
+        embed.add_field(name="Puanlar", value=f"{rating_display}\n{metacritic_display}", inline=True)
         
-        # Platform bilgisi güvenli şekilde al
-        platforms = random_game.get('platforms') or []
+        # Çıkış tarihi ve ESRB
+        released = game_detail.get('released', 'Bilinmiyor')
+        esrb = game_detail.get('esrb_rating')
+        esrb_display = esrb.get('name', 'N/A') if esrb else 'N/A'
+        embed.add_field(name="📅 Çıkış / Yaş Sınırı", value=f"{released}\n🔞 {esrb_display}", inline=True)
+        
+        # Playtime
+        playtime = game_detail.get('playtime', 0)
+        playtime_display = f"⏱️ ~{playtime} saat" if playtime > 0 else "⏱️ Bilinmiyor"
+        embed.add_field(name="Oyun Süresi", value=playtime_display, inline=True)
+        
+        # Türler
+        genres = game_detail.get('genres', [])
+        genre_names = ", ".join([g['name'] for g in genres]) if genres else 'Bilinmiyor'
+        embed.add_field(name="🎯 Türler", value=genre_names, inline=True)
+        
+        # Platformlar
+        platforms = game_detail.get('platforms') or []
         platform_names = []
         for p in platforms:
             if p and p.get('platform') and p['platform'].get('name'):
                 platform_names.append(p['platform']['name'])
-        embed.add_field(name="🖥️ Platformlar", value=", ".join(platform_names) or 'Bilinmiyor', inline=True)
+        embed.add_field(name="🖥️ Platformlar", value=", ".join(platform_names[:5]) or 'Bilinmiyor', inline=True)
         
-        embed.set_footer(text="RAWG API'si ile önerildi 🎯")
+        # Geliştiriciler ve Yayıncılar
+        developers = game_detail.get('developers', [])
+        dev_names = ", ".join([d['name'] for d in developers[:2]]) if developers else 'Bilinmiyor'
+        publishers = game_detail.get('publishers', [])
+        pub_names = ", ".join([p['name'] for p in publishers[:2]]) if publishers else 'Bilinmiyor'
+        embed.add_field(name="👨‍💻 Geliştirici / Yayıncı", value=f"{dev_names}\n📦 {pub_names}", inline=True)
         
+        # Reddit ve Twitch istatistikleri
+        reddit_count = game_detail.get('reddit_count', 0)
+        twitch_count = game_detail.get('twitch_count', 'N/A')
+        youtube_count = game_detail.get('youtube_count', 'N/A')
+        if reddit_count or twitch_count != 'N/A' or youtube_count != 'N/A':
+            social_stats = []
+            if reddit_count:
+                social_stats.append(f"Reddit: {reddit_count:,}")
+            if twitch_count and twitch_count != 'N/A':
+                social_stats.append(f"Twitch: {twitch_count}")
+            if youtube_count and youtube_count != 'N/A':
+                social_stats.append(f"YouTube: {youtube_count}")
+            if social_stats:
+                embed.add_field(name="📊 Sosyal Medya", value="\n".join(social_stats), inline=True)
+        
+        # Alternatif isimler
+        alt_names = game_detail.get('alternative_names', [])
+        if alt_names and len(alt_names) > 0:
+            embed.add_field(name="🔤 Diğer İsimler", value=", ".join(alt_names[:3]), inline=True)
+        
+        # Linkler
+        links = []
+        if game_detail.get('website'):
+            links.append(f"[🌐 Website]({game_detail['website']})")
+        if game_detail.get('metacritic_url'):
+            links.append(f"[🏆 Metacritic]({game_detail['metacritic_url']})")
+        if game_detail.get('reddit_url'):
+            links.append(f"[🔴 Reddit]({game_detail['reddit_url']})")
+        if links:
+            embed.add_field(name="🔗 Linkler", value=" | ".join(links), inline=False)
+        
+        embed.set_footer(text=f"RAWG API | ID: {game_id} | Güncellenme: {game_detail.get('updated', 'N/A')[:10] if game_detail.get('updated') else 'N/A'}")
+        
+        await processing_msg.delete()
         await ctx.send(embed=embed)
     
     except requests.exceptions.Timeout:
-        await ctx.send("⏰ API zaman aşımına uğradı. Lütfen tekrar deneyin.")
+        await processing_msg.edit(content="⏰ API zaman aşımına uğradı. Lütfen tekrar deneyin.")
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 401:
-            await ctx.send("❌ API anahtarı geçersiz. Lütfen doğru RAWG API anahtarını .env dosyasına ekleyin.")
+            await processing_msg.edit(content="❌ API anahtarı geçersiz. Lütfen doğru RAWG API anahtarını .env dosyasına ekleyin.")
         else:
-            await ctx.send(f"❌ API hatası: {e.response.status_code}. Lütfen daha sonra tekrar deneyin.")
+            await processing_msg.edit(content=f"❌ API hatası: {e.response.status_code}. Lütfen daha sonra tekrar deneyin.")
     except Exception as e:
-        await ctx.send(f"❌ Bir hata oluştu: {str(e)}")
+        await processing_msg.edit(content=f"❌ Bir hata oluştu: {str(e)}")
 
 async def main():
     await bot.start(DISCORD_TOKEN)
