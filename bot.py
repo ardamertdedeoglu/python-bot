@@ -1229,8 +1229,8 @@ async def lol(ctx):
     except Exception as e:
         await ctx.send(f"❌ Bir hata oluştu: {str(e)}")
 
-@bot.command()
-async def help(ctx):
+@bot.command(name="help")
+async def help_command(ctx):
     """Bot'un mevcut komutlarını listeler"""
     embed = discord.Embed(
         title="🤖 Bot Komutları",
