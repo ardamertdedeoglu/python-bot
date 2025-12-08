@@ -604,12 +604,11 @@ async def catfact(ctx, *, count: int):
         response = requests.get(api_url, timeout=10)
         response.raise_for_status()
         
-        facts_data = response.json()
+        facts_data = response.json().get('data', [])
         
         if count == 1:
             facts_data = [facts_data]  # Make it a list for uniform processing
-        
-        facts = [fact.get('data', 'No fact available.') for fact in facts_data]
+        facts = [fact for fact in facts_data if fact]
         facts_message = "\n\n".join(f"**Fact {i+1}:** {fact}" for i, fact in enumerate(facts))
         
         await ctx.send(facts_message)
