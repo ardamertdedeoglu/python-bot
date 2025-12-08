@@ -618,7 +618,38 @@ async def quran(ctx):
     except Exception as e:
         await ctx.send("An unexpected error occurred while fetching a Quran verse.")
         print(f"Unexpected error in !quran command: {type(e).__name__} - {e}")
-    
+
+@bot.command()
+async def gender(ctx, *, name: str):
+    """Predicts gender based on a given name."""
+    try:
+        encoded_name = urllib.parse.quote(name)
+        api_url = f"https://api.genderize.io?name={encoded_name}"
+        
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()  # Raise an HTTPError for bad responses
+
+        data = response.json()
+
+        predicted_gender = data.get('gender')
+        probability = data.get('probability')
+        count = data.get('count')
+        if predicted_gender:
+            await ctx.send(f"The predicted gender for the name \"{name}\" is **{predicted_gender}** with a probability of {float(probability)*100:.2f}% based on {count} samples.")
+        else:
+            await ctx.send(f"Sorry, I couldn't predict the gender for the name \"{name}\".")
+    except requests.exceptions.Timeout:
+        await ctx.send("Sorry, the gender prediction service timed out. Please try again later.")
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429:
+            await ctx.send("Sorry, the gender prediction service is currently rate limited. Please try again later.")
+        else:
+            await ctx.send(f"Sorry, the gender prediction service returned an error: {e.response.status_code}. Please try again.")
+    except requests.exceptions.RequestException as e:
+        await ctx.send(f"Sorry, there was an error communicating with the gender prediction service: {type(e).__name__}.")
+    except Exception as e:
+        await ctx.send("An unexpected error occurred while trying to predict gender.")
+        print(f"Unexpected error in !gender command: {type(e).__name__} - {e}")
 
 @bot.command()
 async def satellite(ctx, *, city_name: str):
