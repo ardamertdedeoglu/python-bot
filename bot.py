@@ -7,17 +7,45 @@ import requests
 import urllib.parse # Add urllib.parse
 import datetime
 import io
+from dotenv import load_dotenv
+load_dotenv()
 
 # Environment variables kullan (Railway/Heroku için)
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+RAWG_API_KEY = os.getenv("RAWG_API_KEY")
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 intents.presences = True
 intents.dm_messages = True
 
-bot = commands.Bot(command_prefix='!', intents=intents, help_command=None) # Disable default help command
+class CustomHelpCommand(commands.HelpCommand):
+    async def send_bot_help(self, mapping):
+        embed = discord.Embed(
+            title="🤖 Bot Komutları",
+            description="Mevcut tüm komutlar aşağıda alfabetik sırayla listelenmiştir. Komutları kullanmak için `!komut_adi` yazın.",
+            color=discord.Color.blue()
+        )
+        
+        all_commands = []
+        for cog, cmds in mapping.items():
+            filtered = await self.filter_commands(cmds, sort=True)
+            all_commands.extend(filtered)
+        
+        all_commands.sort(key=lambda c: c.name)
+        
+        for command in all_commands:
+            embed.add_field(
+                name=f"!{command.name}",
+                value=command.help or "Açıklama mevcut değil.",
+                inline=False
+            )
+        
+        channel = self.get_destination()
+        await channel.send(embed=embed)
+
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=CustomHelpCommand())
 
 Country = [
     ('US', 'United States'),
@@ -1229,23 +1257,56 @@ async def lol(ctx):
     except Exception as e:
         await ctx.send(f"❌ Bir hata oluştu: {str(e)}")
 
-@bot.command(name="help")
-async def help_command(ctx):
-    """Bot'un mevcut komutlarını listeler"""
-    embed = discord.Embed(
-        title="🤖 Bot Komutları",
-        description="Mevcut tüm komutlar aşağıda alfabetik sırayla listelenmiştir. Komutları kullanmak için `!komut_adi` yazın.",
-        color=discord.Color.blue()
-    )
+@bot.command()
+async def game(ctx):
+    """Rastgele bir video oyunu önerir (RAWG API'si kullanarak)"""
+    if not RAWG_API_KEY or RAWG_API_KEY == "your_rawg_api_key_here":
+        await ctx.send("❌ RAWG API anahtarı ayarlanmamış. Lütfen .env dosyasına geçerli bir RAWG_API_KEY ekleyin.\nÜcretsiz API anahtarı için: https://rawg.io/login?next=/apikeys")
+        return
     
-    for command in sorted(bot.commands, key=lambda c: c.name):
-        embed.add_field(
-            name=f"!{command.name}",
-            value=command.help or "Açıklama mevcut değil.",
-            inline=False
+    try:
+        # Rastgele bir sayfa seç (1-100 arası)
+        random_page = random.randint(1, 100)
+        api_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&page={random_page}&ordering=-rating"
+        
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        games = data.get('results', [])
+        
+        if not games:
+            await ctx.send("❌ Oyun verisi alınamadı.")
+            return
+        
+        random_game = random.choice(games)
+        
+        embed = discord.Embed(
+            title=f"🎮 Rastgele Oyun Önerisi: {random_game['name']}",
+            description=random_game.get('description_raw', random_game.get('description', 'Açıklama mevcut değil.'))[:500] + "..." if len(random_game.get('description_raw', '')) > 500 else random_game.get('description_raw', 'Açıklama mevcut değil.'),
+            color=discord.Color.green()
         )
+        
+        if random_game.get('background_image'):
+            embed.set_image(url=random_game['background_image'])
+        
+        embed.add_field(name="⭐ Puan", value=f"{random_game.get('rating', 'Bilinmiyor')}/5", inline=True)
+        embed.add_field(name="📅 Çıkış Tarihi", value=random_game.get('released', 'Bilinmiyor'), inline=True)
+        embed.add_field(name="🎯 Türler", value=", ".join([genre['name'] for genre in random_game.get('genres', [])]) or 'Bilinmiyor', inline=True)
+        
+        embed.set_footer(text="RAWG API'si ile önerildi 🎯")
+        
+        await ctx.send(embed=embed)
     
-    await ctx.send(embed=embed)
+    except requests.exceptions.Timeout:
+        await ctx.send("⏰ API zaman aşımına uğradı. Lütfen tekrar deneyin.")
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 401:
+            await ctx.send("❌ API anahtarı geçersiz. Lütfen doğru RAWG API anahtarını .env dosyasına ekleyin.")
+        else:
+            await ctx.send(f"❌ API hatası: {e.response.status_code}. Lütfen daha sonra tekrar deneyin.")
+    except Exception as e:
+        await ctx.send(f"❌ Bir hata oluştu: {str(e)}")
 
 async def main():
     await bot.start(DISCORD_TOKEN)
