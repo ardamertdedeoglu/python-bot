@@ -546,6 +546,8 @@ async def dict(ctx, *, word: str):
         response.raise_for_status()  # Raise an HTTPError for bad responses
 
         data = response.json()
+        origin = data[0].get('origin', 'N/A') if isinstance(data, list) and len(data) > 0 else 'N/A'
+        phonetic = data[0].get('phonetic', 'N/A') if isinstance(data, list) and len(data) > 0 else 'N/A'
 
         if isinstance(data, list) and len(data) > 0:
             definitions = []
@@ -556,7 +558,8 @@ async def dict(ctx, *, word: str):
                     definitions.append(f"**{part_of_speech}:** {def_text}")
 
             definitions_message = "\n".join(definitions[:5])  # Limit to first 5 definitions
-            await processing_message.edit(content=f"**Definitions for \"{word}\":**\n{definitions_message}")
+            await processing_message.edit(content=f"**Definitions for \"{word}\":**\n{definitions_message}\n\n**Origin:** {origin}\n**Phonetic:** {phonetic}")
+            
         else:
             await processing_message.edit(content=f"Sorry, I couldn't find a definition for \"{word}\". Please check the spelling and try again.")
 
