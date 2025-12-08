@@ -291,9 +291,6 @@ async def on_message(message: discord.Message):
         except discord.Forbidden:
             print("Mesajı silmek için yetkim yok.")
 
-    if '!' in message.content and not message.content.startswith('!'): #bot id
-        await message.delete()
-
     # Komutları en sonda işle
     await bot.process_commands(message)
 
