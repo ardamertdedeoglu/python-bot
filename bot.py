@@ -540,6 +540,18 @@ async def location(ctx, *, city_name: str):
     except Exception as e:
         await processing_message.edit(content="An unexpected error occurred while trying to fetch location data.")
         print(f"Unexpected error in !location command: {type(e).__name__} - {e}")
+        
+@bot.command()
+async def cat(ctx):
+    cat_url = "https://cataas.com/cat"
+    #This returns a random cat image
+    cat_image = requests.get(cat_url)
+    if cat_image.status_code == 200:
+        with io.BytesIO(cat_image.content) as image_buffer:
+            await ctx.send(file=discord.File(image_buffer, filename="cat.jpg"))
+    else:
+        await ctx.send("Sorry, I couldn't fetch a cat image right now.")
+    
 
 @bot.command()
 async def satellite(ctx, *, city_name: str):
