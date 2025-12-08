@@ -546,7 +546,6 @@ async def dict(ctx, *, word: str):
         response.raise_for_status()  # Raise an HTTPError for bad responses
 
         data = response.json()
-        origin = data[0].get('origin', 'N/A') if isinstance(data, list) and len(data) > 0 else 'N/A'
         phonetic = data[0].get('phonetic', 'N/A') if isinstance(data, list) and len(data) > 0 else 'N/A'
 
         if isinstance(data, list) and len(data) > 0:
@@ -558,7 +557,7 @@ async def dict(ctx, *, word: str):
                     definitions.append(f"**{part_of_speech}:** {def_text}")
 
             definitions_message = "\n".join(definitions[:5])  # Limit to first 5 definitions
-            await processing_message.edit(content=f"**Definitions for \"{word}\":**\n{definitions_message}\n\n**Origin:** {origin}\n**Phonetic:** {phonetic}")
+            await processing_message.edit(content=f"**Definitions for \"{word}\":**\n{definitions_message}\n\n**Phonetic:** {phonetic}")
             
         else:
             await processing_message.edit(content=f"Sorry, I couldn't find a definition for \"{word}\". Please check the spelling and try again.")
@@ -608,6 +607,34 @@ async def location(ctx, *, city_name: str):
     except Exception as e:
         await processing_message.edit(content="An unexpected error occurred while trying to fetch location data.")
         print(f"Unexpected error in !location command: {type(e).__name__} - {e}")
+
+@bot.command()
+async def musk(ctx):
+    try:
+        musk_url = "https://elonmu.sh/api"
+        response = requests.get(musk_url)
+        
+        data = response.json()
+        
+        source = data.get('source', 'N/A')
+        title = data.get('title', 'N/A')
+        description = data.get('description', 'N/A')
+        url = data.get('url', 'N/A')
+        urlImage = data.get('urlImage', None)
+        date = data.get('date', 'N/A')
+        
+        if urlImage:
+            embed = discord.Embed(title=title, description=description, url=url)
+            embed.set_image(url=urlImage)
+            source_field = f"Source: {source}\nDate: {date}"
+            embed.add_field(name="Info", value=source_field, inline=False)
+        
+            await ctx.send(embed=embed)
+        else:
+            embed = discord.Embed(title=title, description=description, url=url)
+            await ctx.send(embed=embed)
+    except Exception as e:
+        await ctx.send(f"An error occurred: {str(e)}")
         
 @bot.command()
 async def cat(ctx):
