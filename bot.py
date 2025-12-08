@@ -1265,6 +1265,7 @@ async def game(ctx, *, arg: str = ""):
     !game - Rastgele oyun
     !game ;2020 - 2020'den önce çıkmış oyunlar
     !game :2020 - 2020'den sonra çıkmış oyunlar
+    !game .2022 - Sadece 2022 yılında çıkmış oyunlar
     """
     if not RAWG_API_KEY or RAWG_API_KEY == "your_rawg_api_key_here":
         await ctx.send("❌ RAWG API anahtarı ayarlanmamış. Lütfen .env dosyasına geçerli bir RAWG_API_KEY ekleyin.\nÜcretsiz API anahtarı için: https://rawg.io/login?next=/apikeys")
@@ -1287,6 +1288,14 @@ async def game(ctx, *, arg: str = ""):
             date_filter = f"&dates={year}-01-01,{year + 5}-12-31"
         except ValueError:
             await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game :2020")
+            return
+    elif arg.startswith('.'):
+        try:
+            year = int(arg[1:])
+            # Sadece o yıl içinde çıkmış oyunlar
+            date_filter = f"&dates={year}-01-01,{year}-12-31"
+        except ValueError:
+            await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game .2022")
             return
     
     processing_msg = await ctx.send("🔍 Oyun aranıyor...")
