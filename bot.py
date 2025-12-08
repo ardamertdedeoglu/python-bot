@@ -1187,6 +1187,43 @@ async def resume(ctx):
     else:
         await ctx.send("Duraklatılmış bir şarkı yok.")
 
+@bot.command()
+async def lol(ctx):
+    """Rastgele bir League of Legends şampiyonu fotoğrafı gösterir"""
+    try:
+        # Get latest version
+        version_url = "https://ddragon.leagueoflegends.com/api/versions.json"
+        version_response = requests.get(version_url, timeout=10)
+        version_response.raise_for_status()
+        versions = version_response.json()
+        latest_version = versions[0]
+
+        # Get champion list
+        champion_url = f"https://ddragon.leagueoflegends.com/cdn/{latest_version}/data/en_US/champion.json"
+        champion_response = requests.get(champion_url, timeout=10)
+        champion_response.raise_for_status()
+        champion_data = champion_response.json()
+
+        champions = list(champion_data['data'].keys())
+
+        # Pick random champion
+        random_champion = random.choice(champions)
+
+        # Get image URL
+        image_url = f"https://ddragon.leagueoflegends.com/cdn/{latest_version}/img/champion/{random_champion}.png"
+
+        # Send embed with image
+        embed = discord.Embed(title=f"🎮 Rastgele LoL Şampiyonu: {random_champion}", color=discord.Color.blue())
+        embed.set_image(url=image_url)
+        await ctx.send(embed=embed)
+
+    except requests.exceptions.Timeout:
+        await ctx.send("⏰ API zaman aşımına uğradı. Lütfen tekrar deneyin.")
+    except requests.exceptions.HTTPError as e:
+        await ctx.send(f"❌ API hatası: {e.response.status_code}. Lütfen daha sonra tekrar deneyin.")
+    except Exception as e:
+        await ctx.send(f"❌ Bir hata oluştu: {str(e)}")
+
 async def main():
     await bot.start(DISCORD_TOKEN)
 
