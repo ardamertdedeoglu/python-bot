@@ -1290,7 +1290,14 @@ async def game(ctx, *, arg: str = ""):
     try:
         # Rastgele bir sayfa seç (1-100 arası)
         random_page = random.randint(1, 100)
-        api_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&page={random_page}&ordering=-rating"
+        
+        # Tarih filtresi varsa en yeni oyunları, yoksa yüksek puanlı oyunları sırala
+        if date_filter:
+            ordering = "-released"  # Tarih filtresi varsa en yeni oyunları
+        else:
+            ordering = "-metacritic"  # Genel için profesyonel puanlı oyunları
+        
+        api_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&page={random_page}&ordering={ordering}"
         if date_filter:
             api_url += f"&{date_filter}"
         
@@ -1315,7 +1322,7 @@ async def game(ctx, *, arg: str = ""):
         if random_game.get('background_image'):
             embed.set_image(url=random_game['background_image'])
         
-        embed.add_field(name="⭐ Puan", value=f"{random_game.get('rating', 'Bilinmiyor')}/5", inline=True)
+        embed.add_field(name="⭐ Puan", value=f"{random_game.get('metacritic', random_game.get('rating', 'Bilinmiyor'))}/100" if random_game.get('metacritic') else f"{random_game.get('rating', 'Bilinmiyor')}/5", inline=True)
         embed.add_field(name="📅 Çıkış Tarihi", value=random_game.get('released', 'Bilinmiyor'), inline=True)
         embed.add_field(name="🎯 Türler", value=", ".join([genre['name'] for genre in random_game.get('genres', [])]) or 'Bilinmiyor', inline=True)
         embed.add_field(name="🖥️ Platformlar", value=", ".join([platform['platform']['name'] for platform in random_game.get('platforms', [])]) or 'Bilinmiyor', inline=True)
