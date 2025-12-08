@@ -1258,16 +1258,41 @@ async def lol(ctx):
         await ctx.send(f"❌ Bir hata oluştu: {str(e)}")
 
 @bot.command()
-async def game(ctx):
-    """Rastgele bir video oyunu önerir (RAWG API'si kullanarak)"""
+async def game(ctx, *, arg: str = ""):
+    """Rastgele bir video oyunu önerir (RAWG API'si kullanarak)
+    
+    Kullanım:
+    !game - Rastgele oyun
+    !game ;2020 - 2020'den önce çıkmış oyunlar
+    !game :2020 - 2020'den sonra çıkmış oyunlar
+    """
     if not RAWG_API_KEY or RAWG_API_KEY == "your_rawg_api_key_here":
         await ctx.send("❌ RAWG API anahtarı ayarlanmamış. Lütfen .env dosyasına geçerli bir RAWG_API_KEY ekleyin.\nÜcretsiz API anahtarı için: https://rawg.io/login?next=/apikeys")
         return
+    
+    # Parse date filter
+    date_filter = ""
+    if arg.startswith(';'):
+        try:
+            year = int(arg[1:])
+            date_filter = f"dates=1900-01-01,{year}-12-31"
+        except ValueError:
+            await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game ;2020")
+            return
+    elif arg.startswith(':'):
+        try:
+            year = int(arg[1:])
+            date_filter = f"dates={year}-01-01,2025-12-31"
+        except ValueError:
+            await ctx.send("❌ Geçersiz yıl formatı. Örnek: !game :2020")
+            return
     
     try:
         # Rastgele bir sayfa seç (1-100 arası)
         random_page = random.randint(1, 100)
         api_url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40&page={random_page}&ordering=-rating"
+        if date_filter:
+            api_url += f"&{date_filter}"
         
         response = requests.get(api_url, timeout=10)
         response.raise_for_status()
@@ -1276,7 +1301,7 @@ async def game(ctx):
         games = data.get('results', [])
         
         if not games:
-            await ctx.send("❌ Oyun verisi alınamadı.")
+            await ctx.send("❌ Belirtilen kriterlere uygun oyun bulunamadı.")
             return
         
         random_game = random.choice(games)
@@ -1293,6 +1318,7 @@ async def game(ctx):
         embed.add_field(name="⭐ Puan", value=f"{random_game.get('rating', 'Bilinmiyor')}/5", inline=True)
         embed.add_field(name="📅 Çıkış Tarihi", value=random_game.get('released', 'Bilinmiyor'), inline=True)
         embed.add_field(name="🎯 Türler", value=", ".join([genre['name'] for genre in random_game.get('genres', [])]) or 'Bilinmiyor', inline=True)
+        embed.add_field(name="🖥️ Platformlar", value=", ".join([platform['platform']['name'] for platform in random_game.get('platforms', [])]) or 'Bilinmiyor', inline=True)
         
         embed.set_footer(text="RAWG API'si ile önerildi 🎯")
         
