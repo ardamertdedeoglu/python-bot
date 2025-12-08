@@ -551,6 +551,40 @@ async def cat(ctx):
             await ctx.send(file=discord.File(image_buffer, filename="cat.jpg"))
     else:
         await ctx.send("Sorry, I couldn't fetch a cat image right now.")
+
+@bot.command()
+async def bible(ctx):
+            """Fetches a random Bible verse."""
+            try:
+                api_url = "https://bible-api.com/data/web/random"
+                response = requests.get(api_url, timeout=10)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                book = data.get('book', 'Unknown')
+                chapter = data.get('chapter', '?')
+                verse = data.get('verse', '?')
+                text = data.get('text', 'No verse text available.')
+                
+                embed = discord.Embed(
+                    title=f"📖 {book} {chapter}:{verse}",
+                    description=f"*\"{text.strip()}\"*",
+                    color=discord.Color.gold()
+                )
+                embed.set_footer(text="World English Bible (WEB)")
+                
+                await ctx.send(embed=embed)
+                
+            except requests.exceptions.Timeout:
+                await ctx.send("Sorry, the Bible API timed out. Please try again later.")
+            except requests.exceptions.HTTPError as e:
+                await ctx.send(f"Sorry, the Bible API returned an error: {e.response.status_code}.")
+            except requests.exceptions.RequestException as e:
+                await ctx.send(f"Sorry, there was an error communicating with the Bible API: {type(e).__name__}.")
+            except Exception as e:
+                await ctx.send("An unexpected error occurred while fetching a Bible verse.")
+                print(f"Unexpected error in !bible command: {type(e).__name__} - {e}")       
     
 
 @bot.command()
