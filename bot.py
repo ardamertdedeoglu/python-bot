@@ -24,7 +24,6 @@ FIREARM_CHANNELS = [
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 RAWG_API_KEY = os.getenv("RAWG_API_KEY")
-GUN_CHANNEL_ID = int(os.getenv("GUN_CHANNEL_ID"))
 YOUTUBE_COOKIES = os.getenv("YOUTUBE_COOKIES")  # YouTube cookies dosya yolu
 intents = discord.Intents.default()
 intents.members = True
