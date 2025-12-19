@@ -7,13 +7,25 @@ import requests
 import urllib.parse # Add urllib.parse
 import datetime
 import io
+import subprocess
 from dotenv import load_dotenv
 load_dotenv()
+
+# Silah ile ilgili YouTube kanal ID'leri (videos sekmesinden al)
+FIREARM_CHANNELS = [
+    "UCsE_m2z1NrvF2ImeNWh84mw",  # Active Self Protection
+    "UC193r5YXcpQJV34N99ZbhzQ",  # Colion Noir
+    "UCvB3solmhqtgDeLpD-yTtfg",  # Hickok45
+    "UCBvc7pmUp9wiZIFOXEp1sCg",  # Demolition Ranch
+    "UCkAEWxO7NanBzHG_Xkn7-Mg",  # Jager Z999
+]
 
 # Environment variables kullan (Railway/Heroku için)
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 RAWG_API_KEY = os.getenv("RAWG_API_KEY")
+GUN_CHANNEL_ID = int(os.getenv("GUN_CHANNEL_ID"))
+YOUTUBE_COOKIES = os.getenv("YOUTUBE_COOKIES")  # YouTube cookies dosya yolu
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -347,7 +359,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             if not human_users_in_channel:
                 print(f"Bot is now alone in '{voice_client.channel.name}' (Guild: {member.guild.name}). Disconnecting.")
                 await voice_client.disconnect()
-
+                
 @bot.command()
 async def length(ctx, *args):
     arguments = ', '.join(args)
@@ -1061,7 +1073,8 @@ YDL_OPTS = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'ytsearch',
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+    'cookies': YOUTUBE_COOKIES if YOUTUBE_COOKIES else None  # YouTube cookies
 }
 
 FFMPEG_OPTIONS = {
@@ -1219,6 +1232,67 @@ async def resume(ctx):
         await ctx.send("▶️ Müzik devam ediyor!")
     else:
         await ctx.send("Duraklatılmış bir şarkı yok.")
+
+@bot.command()
+async def timer(ctx, seconds: int, url: str):
+    """Belirtilen süre sonunda bir video linkindeki sesi çalar."""
+    await ctx.send(f"⏲️ {seconds} saniyelik zamanlayıcı başlatıldı. Süre dolduğunda ses kanalınıza gelip sesi çalacağım.")
+    
+    # Belirtilen süre kadar bekle
+    await asyncio.sleep(seconds)
+
+    if not ctx.author.voice:
+        await ctx.send(f"🔔 Zaman doldu <@{ctx.author.id}>! Ama bir ses kanalında olmadığın için gelemedim.")
+        return
+
+    channel = ctx.author.voice.channel
+
+    try:
+        # Kanala bağlan veya taşı
+        if not ctx.voice_client:
+            vc = await channel.connect()
+        elif ctx.voice_client.channel != channel:
+            await ctx.voice_client.move_to(channel)
+            vc = ctx.voice_client
+        else:
+            vc = ctx.voice_client
+
+        # yt-dlp ile video bilgisini al
+        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if 'entries' in info:
+                info = info['entries'][0]
+            
+            audio_url = info['url']
+            title = info.get('title', 'Zamanlayıcı Sesi')
+            
+            # Ses bittiğinde kanaldan ayrılma fonksiyonu
+            def after_playing(error):
+                if error:
+                    print(f"Timer player error: {error}")
+                
+                # Bot hala kanaldaysa ayrıl
+                if ctx.voice_client:
+                    coro = ctx.voice_client.disconnect()
+                    asyncio.run_coroutine_threadsafe(coro, bot.loop)
+
+            # Sesi çal
+            if vc.is_playing():
+                vc.stop()
+                
+            source = discord.FFmpegPCMAudio(audio_url, **FFMPEG_OPTIONS)
+            vc.play(source, after=after_playing)
+            await ctx.send(f"🔔 Zaman doldu! **{channel.name}** kanalında çalınıyor: **{title}**")
+            
+    except Exception as e:
+        await ctx.send(f"❌ Hata: {str(e)}")
+        if ctx.voice_client:
+            await ctx.voice_client.disconnect()
+            
+    except Exception as e:
+        await ctx.send(f"❌ Hata: {str(e)}")
+        if ctx.voice_client:
+            await ctx.voice_client.disconnect()
 
 @bot.command()
 async def lol(ctx):
